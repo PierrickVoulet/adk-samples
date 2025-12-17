@@ -22,7 +22,20 @@ from dotenv import load_dotenv
 from llm_auditor.agent import root_agent
 import vertexai
 from vertexai import agent_engines
-from vertexai.preview.reasoning_engines import AdkApp
+from google.genai import types
+
+# A2A
+from google.adk.a2a.utils.agent_to_a2a import to_a2a
+from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
+from google.adk.runners import Runner
+from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
+from google.adk.auth.credential_service.in_memory_credential_service import InMemoryCredentialService
+from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
+from google.adk.sessions.in_memory_session_service import InMemorySessionService
+from a2a.types import AgentCard, AgentSkill
+from llm_auditor.a2a_executor import AgentExecutorWithRunner
+from vertexai.preview.reasoning_engines.templates.a2a import create_agent_card
+from vertexai.preview.reasoning_engines import A2aAgent
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("project_id", None, "GCP project ID.")
@@ -38,10 +51,50 @@ flags.mark_bool_flags_as_mutual_exclusive(["create", "delete"])
 
 def create() -> None:
     """Creates an agent engine for LLM Auditor."""
-    adk_app = AdkApp(agent=root_agent, enable_tracing=True)
-
+    agent_card = create_agent_card(
+        agent_name=root_agent.name,
+        description=root_agent.description,
+        skills=[AgentSkill(
+            id='audit_llm_output',
+            name='Audit LLM Output',
+            description='Critiques and revises outputs from large language models.',
+            tags=['LLM', 'Audit', 'Revision'],
+            examples=[
+                'The earth is flat.',
+                'The capital of France is Berlin.',
+                'The last winner of the Super Bowl was the New England Patriots in 2020.',
+            ],
+        )]
+    )
+    
+    # a2a_agent = A2aAgent(
+    #     agent_card=agent_card,
+    #     agent_executor_builder=lambda: AgentExecutorWithRunner(
+    #         agent=root_agent,
+    #     )
+    # )
+        
+    # a2a_agent = to_a2a(
+    #     agent=root_agent,
+    #     agent_card=agent_card
+    # )
+    
+    a2a_agent = A2aAgent(
+        agent_card=agent_card,
+        agent_executor_builder=lambda: A2aAgentExecutor(
+            runner=Runner(
+                app_name=root_agent.name,
+                agent=root_agent,
+                artifact_service=InMemoryArtifactService(),
+                session_service=InMemorySessionService(),
+                memory_service=InMemoryMemoryService(),
+                credential_service=InMemoryCredentialService(),
+            )
+        )
+    )
+    
     remote_agent = agent_engines.create(
-        adk_app,
+        a2a_agent,
         display_name=root_agent.name,
         requirements=[
             "google-adk (>=0.0.2)",
@@ -49,9 +102,12 @@ def create() -> None:
             "google-genai (>=1.5.0,<2.0.0)",
             "pydantic (>=2.10.6,<3.0.0)",
             "absl-py (>=2.2.1,<3.0.0)",
+            "a2a-sdk>=0.3.0",
+            "uvicorn",
         ],
         extra_packages=["./llm_auditor"],
     )
+
     print(f"Created remote agent: {remote_agent.resource_name}")
 
 
@@ -108,6 +164,10 @@ def main(argv: list[str]) -> None:
         project=project_id,
         location=location,
         staging_bucket=f"gs://{bucket}",
+        http_options=types.HttpOptions(
+            api_version="v1beta1",
+            base_url=f"https://{location}-aiplatform.googleapis.com/"
+        ),
     )
 
     if FLAGS.list:

@@ -15,8 +15,8 @@
 """Constants used by the ChaseSQL algorithm."""
 import os
 from typing import Any
-import immutabledict
 
+import immutabledict
 
 # Parameters for ChaseSQL.
 chase_sql_constants_dict: immutabledict.immutabledict[str, Any] = (

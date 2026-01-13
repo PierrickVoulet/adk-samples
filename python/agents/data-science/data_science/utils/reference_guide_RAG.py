@@ -14,10 +14,10 @@
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv, set_key
-import vertexai
-from vertexai import rag
 
+import vertexai
+from dotenv import load_dotenv, set_key
+from vertexai import rag
 
 # Define the path to the .env file
 env_file_path = Path(__file__).parent.parent.parent / ".env"

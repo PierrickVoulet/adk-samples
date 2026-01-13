@@ -19,7 +19,6 @@ agent.  These instructions guide the agent's behavior, workflow, and tool usage.
 """
 
 
-
 def return_instructions_analytics() -> str:
 
     instruction_prompt_analytics = """

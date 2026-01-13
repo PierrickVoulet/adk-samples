@@ -22,10 +22,9 @@ import sqlglot
 import sqlglot.optimizer
 
 from ..llm_utils import GeminiModel  # pylint: disable=g-importing-member
-from .correction_prompt_template import (
+from .correction_prompt_template import (  # pylint: disable=g-importing-member
     CORRECTION_PROMPT_TEMPLATE_V1_0,
-)  # pylint: disable=g-importing-member
-
+)
 
 ColumnSchemaType = tuple[str, str]
 AllColumnsSchemaType = list[ColumnSchemaType]
@@ -76,8 +75,12 @@ def _isinstance_sqlglot_schema_type(obj: Any) -> bool:
     return (
         isinstance(obj, dict)
         and all([isinstance(v, dict) for v in obj.values()])
-        and all([isinstance(c, str) for d in obj.values() for c, _ in d.items()])
-        and all([isinstance(t, str) for d in obj.values() for _, t in d.items()])
+        and all(
+            [isinstance(c, str) for d in obj.values() for c, _ in d.items()]
+        )
+        and all(
+            [isinstance(t, str) for d in obj.values() for _, t in d.items()]
+        )
     )
     # pylint: enable=g-complex-comprehension
 
@@ -133,7 +136,9 @@ class SqlTranslator:
         self._tool_output_errors: str | None = None
         self._temperature: float = temperature
         if isinstance(model, str):
-            self._model = GeminiModel(model_name=model, temperature=self._temperature)
+            self._model = GeminiModel(
+                model_name=model, temperature=self._temperature
+            )
         else:
             self._model = model
 
@@ -154,7 +159,9 @@ class SqlTranslator:
         return sql_query
 
     @classmethod
-    def _extract_schema_from_ddl_statement(cls, ddl_statement: str) -> TableSchemaType:
+    def _extract_schema_from_ddl_statement(
+        cls, ddl_statement: str
+    ) -> TableSchemaType:
         """Extracts the schema from a single DDL statement."""
         # Split the DDL statement into table name and columns.
         # Match the following pattern:
@@ -208,7 +215,9 @@ class SqlTranslator:
         schema = []
         for ddl_statement in ddl_statements:
             if ddl_statement:
-                ddl_statement = ddl_statement.strip() + ";"  # Add the semicolon back.
+                ddl_statement = (
+                    ddl_statement.strip() + ";"
+                )  # Add the semicolon back.
                 table_name, columns = cls._extract_schema_from_ddl_statement(
                     ddl_statement
                 )
@@ -236,7 +245,9 @@ class SqlTranslator:
         column_types = sample["db_column_types"][1:]
         column_types = [col_types_map[col_type] for col_type in column_types]
         assert len(column_names) == len(column_types)
-        cols_and_types: list[tuple[str, str]] = list(zip(column_names, column_types))
+        cols_and_types: list[tuple[str, str]] = list(
+            zip(column_names, column_types)
+        )
         tables_to_columns: dict[str, dict[str, str]] = {}
         for id_pos, table_id in enumerate(table_ids):
             if tables[table_id] in tables_to_columns.keys():
@@ -244,11 +255,15 @@ class SqlTranslator:
                     dict([cols_and_types[id_pos]])
                 )
             else:
-                tables_to_columns[tables[table_id]] = dict([cols_and_types[id_pos]])
+                tables_to_columns[tables[table_id]] = dict(
+                    [cols_and_types[id_pos]]
+                )
         return tables_to_columns
 
     @classmethod
-    def _get_table_parts(cls, table_name: str) -> tuple[str | None, str | None, str]:
+    def _get_table_parts(
+        cls, table_name: str
+    ) -> tuple[str | None, str | None, str]:
         """Returns the table parts from the table name."""
         table_parts = table_name.split(".")
         if len(table_parts) == 3:
@@ -329,7 +344,9 @@ class SqlTranslator:
             )
             # Then add the database and catalog information for each table to the AST.
             for table in sql_query_ast.find_all(sqlglot.exp.Table):
-                table.set("catalog", sqlglot.exp.Identifier(this=catalog, quoted=True))
+                table.set(
+                    "catalog", sqlglot.exp.Identifier(this=catalog, quoted=True)
+                )
                 table.set("db", sqlglot.exp.Identifier(this=db, quoted=True))
             # Then, try to optimize the SQL query.
             sql_query_ast = sqlglot.optimizer.optimize(
@@ -385,7 +402,9 @@ class SqlTranslator:
             schema_dict=schema_dict,
         )
         errors, sql_query = errors_and_sql
-        responses = sql_query  # Default to the input SQL query after error check.
+        responses = (
+            sql_query  # Default to the input SQL query after error check.
+        )
         if errors:
             print("Processing input errors")
             if schema_dict:

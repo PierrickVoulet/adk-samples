@@ -16,30 +16,29 @@
 
 import os
 import sys
-import pytest
 import unittest
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from google.genai import types
+import pytest
+from data_science.agent import root_agent
+from data_science.sub_agents.bigquery.agent import database_agent
+from data_science.sub_agents.bqml.agent import root_agent as bqml_agent
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.genai import types
 
-from data_science.agent import root_agent
-from data_science.sub_agents.bqml.agent import root_agent as bqml_agent
-from data_science.sub_agents.bigquery.agent import database_agent
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 session_service = InMemorySessionService()
-artifact_service = InMemoryArtifactService() 
+artifact_service = InMemoryArtifactService()
 
 
-class TestAgents(unittest.IsolatedAsyncioTestCase): 
+class TestAgents(unittest.IsolatedAsyncioTestCase):
     """Test cases for the analytics agent and its sub-agents."""
 
-    async def asyncSetUp(self): 
+    async def asyncSetUp(self):
         """Set up for test methods."""
-        super().setUp() 
+        super().setUp()
         self.session = await session_service.create_session(
             app_name="DataAgent",
             user_id="test_user",
@@ -60,7 +59,9 @@ class TestAgents(unittest.IsolatedAsyncioTestCase):
         content = types.Content(role="user", parts=[types.Part(text=query)])
         events = list(
             self.runner.run(
-                user_id=self.user_id, session_id=self.session_id, new_message=content
+                user_id=self.user_id,
+                session_id=self.session_id,
+                new_message=content,
             )
         )
 
@@ -69,7 +70,6 @@ class TestAgents(unittest.IsolatedAsyncioTestCase):
             [part.text for part in last_event.content.parts if part.text]
         )
         return final_response
-
 
     @pytest.mark.db_agent
     async def test_db_agent_can_handle_env_query(self):

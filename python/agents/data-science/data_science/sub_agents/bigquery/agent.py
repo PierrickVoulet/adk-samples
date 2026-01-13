@@ -18,13 +18,14 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from ...utils.utils import get_env_var, USER_AGENT
 from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.tools import BaseTool, ToolContext
 from google.adk.tools.bigquery import BigQueryToolset
 from google.adk.tools.bigquery.config import BigQueryToolConfig, WriteMode
 from google.genai import types
+
+from ...utils.utils import USER_AGENT
 from . import tools
 from .chase_sql import chase_db_tools
 from .prompts import return_instructions_bigquery

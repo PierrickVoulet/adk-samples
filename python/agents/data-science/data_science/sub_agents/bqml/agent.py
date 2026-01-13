@@ -27,8 +27,8 @@ from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.bigquery import BigQueryToolset
 from google.adk.tools.bigquery.config import BigQueryToolConfig, WriteMode
 
-from .prompts import return_instructions_bqml
 from ...utils.utils import USER_AGENT
+from .prompts import return_instructions_bqml
 
 # BigQuery built-in tools in ADK
 # https://google.github.io/adk-docs/tools/built-in-tools/#bigquery

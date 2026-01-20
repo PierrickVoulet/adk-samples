@@ -20,8 +20,10 @@ import requests
 
 # Configuration
 BASE_URL="https://discoveryengine.googleapis.com"
+# projects/ge-gws-agents/locations/global/collections/default_collection/engines/ge_1767795760677
 ENGINE_NAME="projects/{PROJECT_ID}/locations/global/collections/default_collection/engines/{ENGINE_ID}"
 # Extract ID from authorization resource name: projects/ge-gws-agents/locations/global/authorizations/{AUTH_ID}
+# gws-search_1767842690338
 AUTH_ID="YOUR_AUTH_ID"
 
 def search(query: str, tool_context: ToolContext) -> str:

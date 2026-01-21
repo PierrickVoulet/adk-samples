@@ -1,0 +1,37 @@
+{
+  "name": "workspace-server",
+  "version": "0.0.4",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "clean": "rm -rf dist node_modules",
+    "build": "node esbuild.config.js",
+    "build:auth-utils": "node esbuild.auth-utils.js"
+  },
+  "bin": {
+    "workspace-server": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "mcp",
+    "google-workspace",
+    "gemini"
+  ],
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "dompurify": "^3.1.0",
+    "googleapis": "^140.0.0",
+    "jsdom": "^24.0.0",
+    "marked": "^12.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "esbuild": "^0.27.2"
+  }
+}

@@ -131,6 +131,42 @@ export class ChatService {
         }
     }
 
+    public sendWebhookMessage = async ({ url, message }: { url: string, message: string }) => {
+        logToFile(`Sending webhook message: ${message}`);
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json; charset=UTF-8" },
+                body: JSON.stringify({
+                    text: message
+                })
+            });
+            logToFile(`Successfully sent webhook message: ${url}`);
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: await response.json()
+                }]
+            };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            logToFile(`Error during chat.sendWebhookMessage: ${errorMessage}`);
+            if (error instanceof Error && error.stack) {
+                logToFile(`Stack trace: ${error.stack}`);
+            }
+            logToFile(`Full error object: ${JSON.stringify(error, null, 2)}`);
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: JSON.stringify({
+                        error: 'An error occurred while sending the webhook message.',
+                        details: errorMessage
+                    })
+                }]
+            };
+        }
+    }
+
     public findSpaceByName = async ({ displayName }: { displayName: string }) => {
         logToFile(`Finding space with display name: ${displayName}`);
         try {

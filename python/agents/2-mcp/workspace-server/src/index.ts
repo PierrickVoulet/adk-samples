@@ -493,6 +493,18 @@ async function main() {
     );
 
     server.registerTool(
+        "chat_sendWebhookMessage",
+        {
+            description: 'Sends a message to a Google Chat space using a webhook.',
+            inputSchema: {
+                url: z.string().describe('The URL of the webhook to send the message to.'),
+                message: z.string().describe('The message to send.'),
+            }
+        },
+        chatService.sendWebhookMessage
+    );
+
+    server.registerTool(
         "chat_sendMessage",
         {
             description: 'Sends a message to a Google Chat space.',

@@ -51,7 +51,7 @@ function getConfiguredChat() {
 function findChatAppDm(userName) {
   return Chat.Spaces.findDirectMessage(
     { 'name': userName },
-    {'Authorization': `Bearer ${getChatAppCredentials().getAccessToken()}`}
+    {'Authorization': `Bearer ${getAddonCredentials().getAccessToken()}`}
   ).name;
 }
 
@@ -63,6 +63,6 @@ function createMessage(message) {
     message,
     spaceName,
     {},
-    {'Authorization': `Bearer ${getChatAppCredentials().getAccessToken()}`}
+    {'Authorization': `Bearer ${getAddonCredentials().getAccessToken()}`}
   ).name;
 }

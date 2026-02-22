@@ -1,0 +1,165 @@
+// Copyright 2026 Google LLC. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the 'License');
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an 'AS IS' BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+///////////////////////////////////////////////////////
+// --- Gemini Enterprise AI Agent handling logic    ---
+///////////////////////////////////////////////////////
+
+// Sends a request to the AI agent and processes the response
+function requestAgent(input={text: "Who am I and what are my Calendar meetings for today?"}) {
+  // Sync call that gets all events from agent response
+  const responseContentText = UrlFetchApp.fetch(
+    `https://${getLocation()}-discoveryengine.googleapis.com/v1alpha/${getReasoningEngine()}/assistants/default_assistant:streamAssist?alt=sse`,
+    {
+      method: 'post',
+      // Use the user's credentials to ensure the agent can access user data
+      headers: { 'Authorization': `Bearer ${ScriptApp.getOAuthToken()}` },
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        // Always use a new session
+        "session" : null,
+        // Add user metadata such as timezone to help the agent provide better answers
+        "userMetadata": { "timeZone": Session.getScriptTimeZone() },
+        // Only use the message text
+        "query": { "text": "Do not respond with tables, use bullet points instead. " + input.text },
+        // Enable all data stores configured for the agent
+        "toolsSpec": { "vertexAiSearchSpec": { "dataStoreSpecs": getAgentDataStores().map(ds => { dataStore: ds }) }},
+        // Specify the agent to use for this request
+        "agentsSpec": { "agentSpecs": [{ "agentId": getAgentId() }]}
+      }),
+      muteHttpExceptions: true
+    }
+  ).getContentText();
+  if (isInDebugMode()) {
+    console.log(`Response: ${responseContentText}`);
+  }
+
+  // Process the SSE response (one line per event)
+  const events = responseContentText.split('\n').map(s => s.replace(/^data:\s*/, '')).filter(s => s.trim().length > 0);
+  console.log(`Received ${events.length} agent events.`);
+  var answerText = "";
+  for (const eventJson of events) {
+    if (isInDebugMode()) {
+      console.log("Event: " + eventJson);
+    }
+    const event = JSON.parse(eventJson);
+
+    // Ignore internal events
+    if (!event.answer) {
+      console.log(`Ignored: internal event`);
+      continue;
+    }
+
+    // Handle text replies
+    const replies = event.answer.replies || [];
+    for (const reply of replies) {
+      const content = reply.groundedContent.content;
+      // Process content if any
+      if (content) {
+        if (isInDebugMode()) {
+            console.log(`Processing content: ${JSON.stringify(content)}`);
+        }
+        // Ignore thought events
+        if (content.thought) {
+          console.log(`Ignored: thought event`);
+          continue;
+        }
+        answerText += content.text;
+      }
+    }
+
+    // Send Chat message to answer user
+    if (event.answer.state === "SUCCEEDED") {
+      console.log(`Answer text: ${answerText}`);
+      answer(getAgentId().split('/').pop(), answerText);
+    } else if (event.answer.state !== "IN_PROGRESS") {
+      answer(getAgentId().split('/').pop(), "Something went wrong, check the Apps Script logs for more info.", false);
+    }
+  }
+}
+
+// --- Utility functions ---
+
+// Gets the list of data stores configured for the agent to include in the request.
+function getAgentDataStores() {
+  const responseContentText = UrlFetchApp.fetch(
+    `https://${getLocation()}-discoveryengine.googleapis.com/v1/${getReasoningEngine().split('/').slice(0, 6).join('/')}/dataStores`,
+    {
+      method: 'get',
+      // Use the add on service account credentials for data store listing access
+      headers: { 'Authorization': `Bearer ${getAddonCredentials().getAccessToken()}` },
+      contentType: 'application/json',
+      muteHttpExceptions: true
+    }
+  ).getContentText();
+  if (isInDebugMode()) {
+    console.log(`Response: ${responseContentText}`);
+  }
+  const dataStores = JSON.parse(responseContentText).dataStores.map(ds => ds.name);
+  if (isInDebugMode()) {
+    console.log(`Data stores: ${dataStores}`);
+  }
+  return dataStores;
+}
+
+// Sends an answer as a Chat message.
+function answer(author, text, success) {
+  const widgets = createMarkdownWidgets(text);
+  createMessage(buildMessage(author, [wrapWidgetsInCardsV2(widgets)], success));
+}
+
+// Builds a Chat message for the given author, state, and cards_v2.
+function buildMessage(author, cardsV2, success=true) {
+  const messageBuilder = CardService.newChatResponseBuilder();
+  messageBuilder.setText(`${getAuthorEmoji(author)} *${snakeToUserReadable(author)}* ${success ? '✅' : '❌'}`);
+  cardsV2.forEach(cardV2 => { messageBuilder.addCardsV2(cardV2) });
+  let message = JSON.parse(messageBuilder.build().printJson());
+
+  if(isInDebugMode()) {
+    console.log(`Built message: ${JSON.stringify(message)}`);
+  }
+
+  return message;
+}
+
+// Converts a snake_case_string to a user-readable Title Case string.
+function snakeToUserReadable(snakeCaseString = "") {
+  return snakeCaseString.replace(/_/g, ' ').split(' ').map(word => {
+    if (!word) return '';
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(' ');
+}
+
+// Wraps the given widgets in Chat cards_v2 structure.
+function wrapWidgetsInCardsV2(widgets = []) {
+  const section = CardService.newCardSection();
+  widgets.forEach(widget => { section.addWidget(widget) });
+  return CardService.newCardWithId().setCard(CardService.newCardBuilder().addSection(section).build());
+}
+
+// Returns an emoji representing the author.
+function getAuthorEmoji(author) {
+  switch (author) {
+    case "default_agent": return "ℹ️";
+    default: return "🤖";
+  }
+}
+
+// Creates widgets for markdown text response.
+function createMarkdownWidgets(markdown) {
+  if (!markdown) return [];
+  const textParagraph = CardService.newTextParagraph();
+  textParagraph.setText(new showdown.Converter().makeHtml(markdown));
+  return [textParagraph];
+}

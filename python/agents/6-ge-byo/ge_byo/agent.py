@@ -1,84 +1,83 @@
-import sys
-import logging
-import types
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import re
+import google.auth
 from dotenv import load_dotenv
 load_dotenv()
 
+from google.cloud import discoveryengine_v1
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StreamableHTTPConnectionParams
 from google.adk.tools import ToolContext
 
-logger = logging.getLogger(__name__)
+MODEL = "gemini-2.5-flash"
+VERTEXAI_MCP_AUTH_NAME = "vertexai-mcp"
+VERTEXAI_SEARCH_TIMEOUT = 15.0
 
-AUTH_ID = "codelab_1771649435557"
+def get_project_id():
+    """Fetches the consumer project ID from the environment natively."""
+    _, project = google.auth.default()
+    if project:
+        return project
+    raise Exception(f"Failed to resolve GCP Project ID from environment.")
+
+def find_serving_config_path():
+    """Dynamically finds the default serving config in the engine."""
+    project_id = get_project_id()
+    
+    engines = discoveryengine_v1.EngineServiceClient().list_engines(
+        parent=f"projects/{project_id}/locations/global/collections/default_collection"
+    )
+    for engine in engines:
+        # engine.name natively contains the numeric Project Number
+        return f"{engine.name}/servingConfigs/default_serving_config"
+    raise Exception(f"No Discovery Engines found in project {project_id}")
 
 def auth_header_provider(context: ToolContext) -> dict[str, str]:
-    # Debug: Print the entire ToolContext and InvocationContext to see what's available
-    logger.info(f"DEBUG ToolContext State: {context.state}")
-    
-    if getattr(context, '_invocation_context', None):
-        inv_ctx = context._invocation_context
-        logger.info(f"DEBUG InvocationContext dict: {getattr(inv_ctx, '__dict__', None)}")
-        logger.info(f"DEBUG InvocationContext class fields: {dir(inv_ctx)}")
-        if getattr(inv_ctx, 'session', None):
-             logger.info(f"DEBUG Session dict: {getattr(inv_ctx.session, '__dict__', None)}")
+    # Dynamically find the first key that matches VERTEXAI_MCP_AUTH_NAME_number (e.g., "vertexai-mcp_12345")
+    escaped_name = re.escape(VERTEXAI_MCP_AUTH_NAME)
+    pattern = re.compile(fr"^{escaped_name}_\d+$")
+    matching_keys = [k for k in context.state.keys() if pattern.match(k)]
+    if matching_keys:
+        return {"Authorization": f"Bearer {context.state.get(matching_keys[0])}"}
+    raise Exception(f"No bearer token found in ToolContext state matching pattern {pattern.pattern}")
 
-    access_token = context.state.get(AUTH_ID)
-    if not access_token:
-        logger.warning(f"No bearer token found in ToolContext state. Falling back to mock-token.")
-        access_token = "mock-token"
-    else:
-        logger.info("Successfully injected bearer token from ToolContext state.")
-    return {"Authorization": f"Bearer {access_token}"}
-
-class SafeMcpToolset(McpToolset):
-    """
-    Subclass McpToolset to catch 401 errors during tool execution so they
-    return as a clean string to the LLM without crashing or hanging the agent.
-    """
-    async def get_tools(self, readonly_context=None):
-        try:
-            tools = await super().get_tools(readonly_context)
-        except Exception as e:
-            err_str = str(e)
-            if '401' in err_str or 'Unauthorized' in err_str:
-                logger.error(f"401 Unauthorized during get_tools: {err_str}")
-            # If we fail to get tools, we must raise so the user knows.
-            raise e
-
-        # Wrap the tools run_async to catch 401s and other connection errors
-        for t in tools:
-            orig_run = t.run_async
-            async def safe_run(self_tool, *args, **kwargs):
-                try:
-                    return await orig_run(*args, **kwargs)
-                except Exception as ex:
-                    err_str = str(ex)
-                    if '401' in err_str or 'Unauthorized' in err_str:
-                        return {"error": "401 Unauthorized: The provided token is invalid or expired."}
-                    return {"error": f"Tool execution failed: {err_str}"}
-            t.run_async = types.MethodType(safe_run, t)
-            
-        return tools
-
-# Note: We set both timeout (connection timeout) and sse_read_timeout to 15.0 seconds
-# to prevent the agent from hanging for up to 3000 seconds when calling the search tool.
-vertexai_mcp = SafeMcpToolset(
+vertexai_mcp = McpToolset(
     connection_params=StreamableHTTPConnectionParams(
         url="https://discoveryengine.googleapis.com/mcp",
-        timeout=15.0,
-        sse_read_timeout=15.0
+        timeout=VERTEXAI_SEARCH_TIMEOUT,
+        sse_read_timeout=VERTEXAI_SEARCH_TIMEOUT
     ),
     tool_filter=['search'],
     header_provider=auth_header_provider
 )
 
+# Answer nicely the following user queries:
+#  - Please find my meetings for today, I need their titles and links
+#  - What is the latest Drive file I created?
+#  - What is the latest Gmail message I received?
+
 root_agent = LlmAgent(
-    model='gemini-2.5-flash',
+    model=MODEL,
     name='ge_byo',
-    instruction="""
-        You are a helpful assistant that always
-        use the Vertex AI MCP search tool to answer the user's query even if it seems impossible to get an answer.
-        Always use the servingConfig projects/626210666927/locations/global/collections/default_collection/engines/codelab_1771524014204/servingConfigs/default_serving_config""",
+    instruction=f"""
+        You are a helpful assistant that always uses the Vertex AI MCP search tool to answer the user's message.
+        You MUST unconditionally use the Vertex AI MCP search tool to find answer, even if you believe you already know the answer or believe the Vertex AI MCP search tool does not contain the data.
+        The Vertex AI MCP search tool accesses the user's data through datastores including Google Drive, Google Calendar, and Gmail.
+        Only use the Vertex AI MCP search tool with servingConfig and query parameters, do not use any other parameters.
+        Always use the servingConfig {find_serving_config_path()} while using the Vertex AI MCP search tool.
+    """,
     tools=[vertexai_mcp]
 )

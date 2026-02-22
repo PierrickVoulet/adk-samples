@@ -1,1 +1,43 @@
-# GE BYO
+# Gemini Enterprise BYO Agent (GE-BYO)
+
+This repository contains a specialized Gemini Enterprise Agent built using the Google Agent Development Kit (ADK). The primary objective of this agent is to act as an Enterprise AI Assistant by querying your organization's data corpus using the Vertex AI Search MCP toolset.
+
+## Key Features
+
+1. **Dynamic Vertex AI Serving Configs:** 
+   The agent automatically discovers your project's `default_collection` engine and dynamically binds its queries to the `default_serving_config`.
+   
+2. **Dynamic Authentication (`ToolContext`):** 
+   When deployed as a Bring-Your-Own (BYO) model via Gemini Enterprise, the session state dynamically passes an authentication token (e.g., `vertexai-mcp_12345`). This agent intercepts the `ToolContext` state and extracts the token at runtime using regex pattern matching (`^vertexai-mcp_\d+$`) to securely execute calls using a Bearer token.
+
+3. **Graceful Timeouts:**
+   The `McpToolset` streaming components have been intentionally configured with an explicit 15-second `timeout` and `sse_read_timeout` to prevent the agent from hanging infinitely on backend network issues.
+
+## Prerequisites & Installation
+
+This project utilizes Poetry to manage its environment and dependencies.
+
+### Environment Setup
+
+Install all strictly-bound dependencies (resolving underlying grpc and discovery-engine constraints):
+```bash
+poetry install
+```
+
+## Deployment
+
+Deploying this agent directly to Cloud Run / Vertex AI Agent Engines:
+
+```bash
+adk deploy agent_engine \
+  --project=your-gcp-project-id \
+  --region=us-central1 \
+  --display_name="GE BYO" \
+  --trace_to_cloud \
+  --otel_to_cloud \
+  ge_byo
+```
+
+Ensure the deployment Service Account explicitly holds:
+- `discoveryengine.engines.list` permission
+- Broad sufficient access to execute Vertex Search queries via MCP.

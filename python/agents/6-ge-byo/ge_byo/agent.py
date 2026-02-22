@@ -20,10 +20,12 @@ load_dotenv()
 from google.cloud import discoveryengine_v1
 from google.adk.agents.llm_agent import LlmAgent
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StreamableHTTPConnectionParams
-from google.adk.tools import ToolContext
+from google.adk.tools import ToolContext, FunctionTool
+from google.apps import chat_v1
+from google.oauth2.credentials import Credentials
 
 MODEL = "gemini-2.5-flash"
-VERTEXAI_MCP_AUTH_NAME = "vertexai-mcp"
+GE_AUTH_NAME = "enteprise-ai"
 VERTEXAI_SEARCH_TIMEOUT = 15.0
 
 def get_project_id():
@@ -45,14 +47,50 @@ def find_serving_config_path():
         return f"{engine.name}/servingConfigs/default_serving_config"
     raise Exception(f"No Discovery Engines found in project {project_id}")
 
-def auth_header_provider(context: ToolContext) -> dict[str, str]:
-    # Dynamically find the first key that matches VERTEXAI_MCP_AUTH_NAME_number (e.g., "vertexai-mcp_12345")
-    escaped_name = re.escape(VERTEXAI_MCP_AUTH_NAME)
+def _get_access_token_from_context(tool_context: ToolContext) -> str:
+    """Helper method to dynamically parse the intercepted bearer token from the context state."""
+    escaped_name = re.escape(GE_AUTH_NAME)
     pattern = re.compile(fr"^{escaped_name}_\d+$")
-    matching_keys = [k for k in context.state.keys() if pattern.match(k)]
+    # Handle ADK 1.25.1 varying state object types (Raw Dict vs ADK State)
+    state_dict = tool_context.state.to_dict() if hasattr(tool_context.state, 'to_dict') else tool_context.state
+    matching_keys = [k for k in state_dict.keys() if pattern.match(k)]
+    
     if matching_keys:
-        return {"Authorization": f"Bearer {context.state.get(matching_keys[0])}"}
+        return state_dict.get(matching_keys[0])
     raise Exception(f"No bearer token found in ToolContext state matching pattern {pattern.pattern}")
+
+def auth_header_provider(tool_context: ToolContext) -> dict[str, str]:
+    token = _get_access_token_from_context(tool_context)
+    return {"Authorization": f"Bearer {token}"}
+
+def send_direct_message(email: str, message: str, tool_context: ToolContext) -> dict:
+    """Sends a Google Chat Direct Message (DM) to a specific Workspace user by email address."""
+    chat_client = chat_v1.ChatServiceClient(credentials=Credentials(token=_get_access_token_from_context(tool_context)))
+
+    # 1. Setup the DM Space or find existing one
+    person = chat_v1.User(
+        name=f"users/{email}",
+        type_=chat_v1.User.Type.HUMAN
+    )
+    membership = chat_v1.Membership(member=person)
+    space_req = chat_v1.Space(space_type=chat_v1.Space.SpaceType.DIRECT_MESSAGE)
+    
+    setup_request = chat_v1.SetUpSpaceRequest(
+        space=space_req,
+        memberships=[membership]
+    )
+    space_response = chat_client.set_up_space(request=setup_request)
+    space_name = space_response.name
+    
+    # 2. Send the Message
+    msg = chat_v1.Message(text=message)
+    message_request = chat_v1.CreateMessageRequest(
+        parent=space_name,
+        message=msg
+    )
+    message_response = chat_client.create_message(request=message_request)
+    
+    return {"status": "success", "message_id": message_response.name, "space": space_name}
 
 vertexai_mcp = McpToolset(
     connection_params=StreamableHTTPConnectionParams(
@@ -68,16 +106,18 @@ vertexai_mcp = McpToolset(
 #  - Please find my meetings for today, I need their titles and links
 #  - What is the latest Drive file I created?
 #  - What is the latest Gmail message I received?
+#  - Please the following message to [EMAIL_ADDRESS]: Hello, this is a test message from my assistant.
 
 root_agent = LlmAgent(
     model=MODEL,
     name='ge_byo',
     instruction=f"""
-        You are a helpful assistant that always uses the Vertex AI MCP search tool to answer the user's message.
+        You are a helpful assistant that always uses the Vertex AI MCP search tool to answer the user's message, unless the user asks you to send a message to someone.
+        If the user asks you to send a message to someone, use the send_direct_message tool to send the message.
         You MUST unconditionally use the Vertex AI MCP search tool to find answer, even if you believe you already know the answer or believe the Vertex AI MCP search tool does not contain the data.
         The Vertex AI MCP search tool accesses the user's data through datastores including Google Drive, Google Calendar, and Gmail.
         Only use the Vertex AI MCP search tool with servingConfig and query parameters, do not use any other parameters.
         Always use the servingConfig {find_serving_config_path()} while using the Vertex AI MCP search tool.
     """,
-    tools=[vertexai_mcp]
+    tools=[vertexai_mcp, FunctionTool(send_direct_message)]
 )

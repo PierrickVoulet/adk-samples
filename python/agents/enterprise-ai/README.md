@@ -1,4 +1,4 @@
-# Gemini Enterprise BYO Agent (GE-BYO)
+# Enterprise AI Agent (built as Gemini Enterprise BYO Agent)
 
 This repository contains a specialized Gemini Enterprise Agent built using the Google Agent Development Kit (ADK). The primary objective of this agent is to act as an Enterprise AI Assistant by querying your organization's data corpus using the Vertex AI Search MCP toolset.
 
@@ -28,13 +28,8 @@ Deploy this agent directly to Vertex AI Agent Engines using the ADK CLI:
 adk deploy agent_engine \
   --project=your-gcp-project-id \
   --region=us-central1 \
-  --display_name="GE BYO" \
+  --display_name="Enterprise AI" \
   --trace_to_cloud \
   --otel_to_cloud \
-  ge_byo
+  enterprise_ai
 ```
-
-Ensure the deployment Service Account explicitly holds:
-- `discoveryengine.engines.list` permission
-- Broad sufficient access to execute Vertex Search queries via MCP.
-- Permissions to read and send chat messages.

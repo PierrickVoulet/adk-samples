@@ -1,7 +1,7 @@
 [project]
-name = "ge-byo"
+name = "enterprise-ai"
 version = "0.1.0"
-description = "The GE BYO agent."
+description = "The Enterprise AI agent."
 license = "Apache-2.0"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"

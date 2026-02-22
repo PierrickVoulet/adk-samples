@@ -110,7 +110,7 @@ vertexai_mcp = McpToolset(
 
 root_agent = LlmAgent(
     model=MODEL,
-    name='ge_byo',
+    name='enterprise_ai',
     instruction=f"""
         You are a helpful assistant that always uses the Vertex AI MCP search tool to answer the user's message, unless the user asks you to send a message to someone.
         If the user asks you to send a message to someone, use the send_direct_message tool to send the message.

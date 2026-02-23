@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/**
- * Triggered when the user opens the Gmail Add-on or selects an email.
- * @param {Object} event The event object provided by the add-on framework.
- * @return {CardService.Card} The card to display to the user.
- */
+// Triggered when the user opens the Gmail Add-on or selects an email.
 function onAddonEvent(event) {
   // If this was triggered by a button click, handle it
   if (event.parameters && event.parameters.action === 'send') {
@@ -27,12 +23,8 @@ function onAddonEvent(event) {
   return createSidebarCard();
 }
 
-/**
- * Creates the standard Gmail sidebar card consisting of a text input and send button.
- * Optionally includes an answer section if a response was generated.
- * @param {CardService.CardSection} optionalAnswerSection
- * @return {CardService.Card}
- */
+// Creates the standard Gmail sidebar card consisting of a text input and send button.
+// Optionally includes an answer section if a response was generated.
 function createSidebarCard(optionalAnswerSection) {
   const card = CardService.newCardBuilder();
   const actionSection = CardService.newCardSection();
@@ -66,11 +58,7 @@ function createSidebarCard(optionalAnswerSection) {
   return card.build();
 }
 
-/**
- * Handles clicks from the Send message button.
- * @param {Object} event
- * @return {CardService.ActionResponse}
- */
+// Handles clicks from the Send message button.
 function handleSendMessage(event) {
   const commonEventObject = event.commonEventObject || {};
   const formInputs = commonEventObject.formInputs || {};
@@ -138,12 +126,8 @@ function handleSendMessage(event) {
   }
 }
 
-/**
- * Removes markdown listings (bulleted and numbered) from the given markdown text.
- * @param {string} text The markdown text.
- * @return {string} The text with substituted listings.
- */
+// Removes markdown listings (bulleted and numbered) from the given markdown text.
 function substituteListingsFromMarkdown(text) {
-  const pattern = /^\s*([*-+]|\d+\.)\s+/gm; // 'm' for multiline
+  const pattern = /^\s*([*-+]|\d+\.)\s+/gm;
   return text.replace(pattern, '-> ');
 }

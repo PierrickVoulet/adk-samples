@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-///////////////////////////////////////////////////////
-// --- Gemini Enterprise AI Agent handling logic    ---
-///////////////////////////////////////////////////////
+// Service that handles Gemini Enterprise AI Agent operations.
 
 // Sends a request to the AI agent and processes the response for Chat UI
 function requestAgent(input) {

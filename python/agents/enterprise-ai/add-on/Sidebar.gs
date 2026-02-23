@@ -112,7 +112,7 @@ function handleSendMessage(event) {
   }
 
   try {
-    const responseText = requestAgentSync({ text: finalQueryText, forceNewSession: true });
+    const responseText = queryAgent({ text: finalQueryText, forceNewSession: true });
 
     // We leverage the 'showdown' library to parse the LLM's Markdown output into HTML
     // We also substitute markdown listings with arrows and adjust newlines for clearer rendering in the sidebar

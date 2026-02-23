@@ -16,88 +16,20 @@
 // --- Gemini Enterprise AI Agent handling logic    ---
 ///////////////////////////////////////////////////////
 
-// Sends a request to the AI agent and processes the response
+// Sends a request to the AI agent and processes the response for Chat UI
 function requestAgent(input) {
-  const isNewSession = !PropertiesService.getUserProperties().getProperty(AGENT_SESSION_NAME);
-  const sessionName = getOrCreateAgentSession();
-  const queryText = isNewSession ? "SYSTEM PROMPT START Do not respond with tables but use bullet points instead SYSTEM PROMPT END\n\n" + input.text : input.text;
-
-  // Prepare the streamAssist payload
-  const requestPayload = {
-    // Reuse the user session
-    "session": sessionName,
-    // Add user metadata such as timezone to help the agent provide better answers
-    "userMetadata": { "timeZone": Session.getScriptTimeZone() },
-    // Only use the message text
-    "query": { "text": queryText },
-    // Enable all data stores configured for the agent
-    "toolsSpec": { "vertexAiSearchSpec": { "dataStoreSpecs": getAgentDataStores().map(ds => { dataStore: ds }) } },
-    // Specify the agent to use for this request
-    "agentsSpec": { "agentSpecs": [{ "agentId": getAgentId() }] }
-  };
-
-  // Sync call that gets all events from agent response
-  const responseContentText = UrlFetchApp.fetch(
-    `https://${getLocation()}-discoveryengine.googleapis.com/v1alpha/${getReasoningEngine()}/assistants/default_assistant:streamAssist?alt=sse`,
-    {
-      method: 'post',
-      // Use the user's credentials to ensure the agent can access user data
-      headers: { 'Authorization': `Bearer ${ScriptApp.getOAuthToken()}` },
-      contentType: 'application/json',
-      payload: JSON.stringify(requestPayload),
-      muteHttpExceptions: true
+  try {
+    const answerText = queryAgent(input);
+    if (answerText) {
+      answer(getAgentId().split('/').pop(), answerText, true);
     }
-  ).getContentText();
-  if (isInDebugMode()) {
-    console.log(`Response: ${responseContentText}`);
-  }
-
-  // Process the SSE response (one line per event)
-  const events = responseContentText.split('\n').map(s => s.replace(/^data:\s*/, '')).filter(s => s.trim().length > 0);
-  console.log(`Received ${events.length} agent events.`);
-  var answerText = "";
-  for (const eventJson of events) {
-    if (isInDebugMode()) {
-      console.log("Event: " + eventJson);
-    }
-    const event = JSON.parse(eventJson);
-
-    // Ignore internal events
-    if (!event.answer) {
-      console.log(`Ignored: internal event`);
-      continue;
-    }
-
-    // Handle text replies
-    const replies = event.answer.replies || [];
-    for (const reply of replies) {
-      const content = reply.groundedContent.content;
-      // Process content if any
-      if (content) {
-        if (isInDebugMode()) {
-            console.log(`Processing content: ${JSON.stringify(content)}`);
-        }
-        // Ignore thought events
-        if (content.thought) {
-          console.log(`Ignored: thought event`);
-          continue;
-        }
-        answerText += content.text;
-      }
-    }
-
-    // Send Chat message to answer user
-    if (event.answer.state === "SUCCEEDED") {
-      console.log(`Answer text: ${answerText}`);
-      answer(getAgentId().split('/').pop(), answerText);
-    } else if (event.answer.state !== "IN_PROGRESS") {
-      answer(getAgentId().split('/').pop(), "Something went wrong, check the Apps Script logs for more info.", false);
-    }
+  } catch (err) {
+    answer(getAgentId().split('/').pop(), err.message, false);
   }
 }
 
-// Sends a request to the AI agent and returns the response string synchronously
-function requestAgentSync(input) {
+// Submits a query to the AI agent and returns the response string synchronously
+function queryAgent(input) {
   const isNewSession = input.forceNewSession || !PropertiesService.getUserProperties().getProperty(AGENT_SESSION_NAME);
   const sessionName = input.forceNewSession ? createAgentSession() : getOrCreateAgentSession();
 
@@ -127,12 +59,14 @@ function requestAgentSync(input) {
       muteHttpExceptions: true
     }
   ).getContentText();
+
   if (isInDebugMode()) {
     console.log(`Response: ${responseContentText}`);
   }
 
   const events = responseContentText.split('\n').map(s => s.replace(/^data:\s*/, '')).filter(s => s.trim().length > 0);
   console.log(`Received ${events.length} agent events.`);
+
   let answerText = "";
   for (const eventJson of events) {
     if (isInDebugMode()) {
@@ -150,12 +84,10 @@ function requestAgentSync(input) {
     const replies = event.answer.replies || [];
     for (const reply of replies) {
       const content = reply.groundedContent.content;
-      // Process content if any
       if (content) {
         if (isInDebugMode()) {
           console.log(`Processing content: ${JSON.stringify(content)}`);
         }
-        // Ignore thought events
         if (content.thought) {
           console.log(`Ignored: thought event`);
           continue;
@@ -164,14 +96,14 @@ function requestAgentSync(input) {
       }
     }
 
-    // Send Chat message to answer user
     if (event.answer.state === "SUCCEEDED") {
       console.log(`Answer text: ${answerText}`);
       return answerText;
     } else if (event.answer.state !== "IN_PROGRESS") {
-      return "Something went wrong, check the Apps Script logs for more info.";
+      throw new Error("Something went wrong, check the Apps Script logs for more info.");
     }
   }
+  return answerText;
 }
 
 // Gets the list of data stores configured for the agent to include in the request.

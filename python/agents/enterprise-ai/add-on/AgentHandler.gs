@@ -17,8 +17,8 @@
 ///////////////////////////////////////////////////////
 
 // Sends a request to the AI agent and processes the response
-function requestAgent(input = { text: "Who am I and what are my Calendar meetings for today?" }) {
-  const isNewSession = !PropertiesService.getUserProperties().getProperty('AGENT_SESSION_NAME');
+function requestAgent(input) {
+  const isNewSession = !PropertiesService.getUserProperties().getProperty(AGENT_SESSION_NAME);
   const sessionName = getOrCreateAgentSession();
   const queryText = isNewSession ? "SYSTEM PROMPT START Do not respond with tables but use bullet points instead SYSTEM PROMPT END\n\n" + input.text : input.text;
 
@@ -96,7 +96,83 @@ function requestAgent(input = { text: "Who am I and what are my Calendar meeting
   }
 }
 
-// --- Utility functions ---
+// Sends a request to the AI agent and returns the response string synchronously
+function requestAgentSync(input) {
+  const isNewSession = input.forceNewSession || !PropertiesService.getUserProperties().getProperty(AGENT_SESSION_NAME);
+  const sessionName = input.forceNewSession ? createAgentSession() : getOrCreateAgentSession();
+
+  let systemPrompt = "SYSTEM PROMPT START Do not respond with tables but use bullet points instead.";
+  if (input.forceNewSession) {
+    systemPrompt += " Do not ask the user follow-up questions or converse with them as history is not kept in this interface.";
+  }
+  systemPrompt += " SYSTEM PROMPT END\n\n";
+
+  const queryText = isNewSession ? systemPrompt + input.text : input.text;
+
+  const requestPayload = {
+    "session": sessionName,
+    "userMetadata": { "timeZone": Session.getScriptTimeZone() },
+    "query": { "text": queryText },
+    "toolsSpec": { "vertexAiSearchSpec": { "dataStoreSpecs": getAgentDataStores().map(ds => { dataStore: ds }) } },
+    "agentsSpec": { "agentSpecs": [{ "agentId": getAgentId() }] }
+  };
+
+  const responseContentText = UrlFetchApp.fetch(
+    `https://${getLocation()}-discoveryengine.googleapis.com/v1alpha/${getReasoningEngine()}/assistants/default_assistant:streamAssist?alt=sse`,
+    {
+      method: 'post',
+      headers: { 'Authorization': `Bearer ${ScriptApp.getOAuthToken()}` },
+      contentType: 'application/json',
+      payload: JSON.stringify(requestPayload),
+      muteHttpExceptions: true
+    }
+  ).getContentText();
+  if (isInDebugMode()) {
+    console.log(`Response: ${responseContentText}`);
+  }
+
+  const events = responseContentText.split('\n').map(s => s.replace(/^data:\s*/, '')).filter(s => s.trim().length > 0);
+  console.log(`Received ${events.length} agent events.`);
+  let answerText = "";
+  for (const eventJson of events) {
+    if (isInDebugMode()) {
+      console.log("Event: " + eventJson);
+    }
+    const event = JSON.parse(eventJson);
+
+    // Ignore internal events
+    if (!event.answer) {
+      console.log(`Ignored: internal event`);
+      continue;
+    }
+
+    // Handle text replies
+    const replies = event.answer.replies || [];
+    for (const reply of replies) {
+      const content = reply.groundedContent.content;
+      // Process content if any
+      if (content) {
+        if (isInDebugMode()) {
+          console.log(`Processing content: ${JSON.stringify(content)}`);
+        }
+        // Ignore thought events
+        if (content.thought) {
+          console.log(`Ignored: thought event`);
+          continue;
+        }
+        answerText += content.text;
+      }
+    }
+
+    // Send Chat message to answer user
+    if (event.answer.state === "SUCCEEDED") {
+      console.log(`Answer text: ${answerText}`);
+      return answerText;
+    } else if (event.answer.state !== "IN_PROGRESS") {
+      return "Something went wrong, check the Apps Script logs for more info.";
+    }
+  }
+}
 
 // Gets the list of data stores configured for the agent to include in the request.
 function getAgentDataStores() {
@@ -212,3 +288,4 @@ function getOrCreateAgentSession() {
 
   return sessionName;
 }
+

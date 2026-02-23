@@ -13,6 +13,11 @@
         "userSymbol": "Chat",
         "version": "v1",
         "serviceId": "chat"
+      },
+      {
+        "userSymbol": "Gmail",
+        "version": "v1",
+        "serviceId": "gmail"
       }
     ]
   },
@@ -20,13 +25,23 @@
   "runtimeVersion": "V8",
   "addOns": {
     "common": {
-      "name": "Enterprise AI add on",
+      "name": "Enterprise AI",
       "logoUrl": "https://developers.google.com/workspace/add-ons/images/quickstart-app-avatar.png"
     },
-    "chat": {}
+    "chat": {},
+    "gmail": {
+      "contextualTriggers": [
+        {
+          "unconditional": {},
+          "onTriggerFunction": "onAddonEvent"
+        }
+      ]
+    }
   },
   "oauthScopes": [
     "https://www.googleapis.com/auth/script.external_request",
-    "https://www.googleapis.com/auth/discoveryengine.assist.readwrite"
+    "https://www.googleapis.com/auth/discoveryengine.assist.readwrite",
+    "https://www.googleapis.com/auth/gmail.addons.execute",
+    "https://www.googleapis.com/auth/gmail.addons.current.message.readonly"
   ]
 }

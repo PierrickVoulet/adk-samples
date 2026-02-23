@@ -1,6 +1,8 @@
 # Enterprise AI Agent (built as Gemini Enterprise BYO Agent)
 
-This repository contains a specialized Gemini Enterprise Agent built using the Google Agent Development Kit (ADK). The primary objective of this agent is to act as an Enterprise AI Assistant by querying your organization's data corpus using the Vertex AI Search MCP toolset.
+**Note:** This project is part of an official Google Codelab ([link pending](#)).
+
+This sample contains a specialized Gemini Enterprise Agent built using the Google Agent Development Kit (ADK). The primary objective of this agent is to act as an Enterprise AI Assistant by querying your organization's data corpus using the Vertex AI Search MCP toolset.
 
 ## Key Features
 
@@ -19,8 +21,6 @@ This repository contains a specialized Gemini Enterprise Agent built using the G
 ## Deployment
 
 This agent is designed exclusively to be deployed as a backend for a Gemini Enterprise (GE) Bring-Your-Own (BYO) Agent. It **will not** work successfully if tested locally via standard ADK run commands because it relies entirely on the external GE gateway to dynamically inject OAuth tokens into the `ToolContext` at runtime.
-
-This code is part of a complete tutorial on integrating custom MCP servers. For full instructions on how to set up the GE environment, provision authentication, and link this custom agent to the frontend, refer to the [official tutorial guide here (link pending...)](#).
 
 Deploy this agent directly to Vertex AI Agent Engines using the ADK CLI:
 

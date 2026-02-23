@@ -17,7 +17,7 @@
 ///////////////////////////////////////////////////////
 
 // Sends a request to the AI agent and processes the response
-function requestAgent(input = { text: "Who am I and what are my Calendar meetings for today?" }, attachments = []) {
+function requestAgent(input = { text: "Who am I and what are my Calendar meetings for today?" }) {
   const isNewSession = !PropertiesService.getUserProperties().getProperty('AGENT_SESSION_NAME');
   const sessionName = getOrCreateAgentSession();
   const queryText = isNewSession ? "SYSTEM PROMPT START Do not respond with tables but use bullet points instead SYSTEM PROMPT END\n\n" + input.text : input.text;

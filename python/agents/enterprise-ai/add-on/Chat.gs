@@ -66,16 +66,3 @@ function createMessage(message) {
     {'Authorization': `Bearer ${getAddonCredentials().getAccessToken()}`}
   ).name;
 }
-
-// Downloads a Chat message attachment and returns its content as a base64 encoded string.
-function downloadChatAttachment(attachmentName) {
-  const response = UrlFetchApp.fetch(
-    `https://chat.googleapis.com/v1/media/${attachmentName}?alt=media`,
-    {
-      method: 'get',
-      headers: { 'Authorization': `Bearer ${getAddonCredentials().getAccessToken()}` },
-      muteHttpExceptions: true
-    }
-  );
-  return Utilities.base64Encode(response.getContent());
-}

@@ -17,7 +17,25 @@
 ///////////////////////////////////////////////////////
 
 // Sends a request to the AI agent and processes the response
-function requestAgent(input={text: "Who am I and what are my Calendar meetings for today?"}) {
+function requestAgent(input = { text: "Who am I and what are my Calendar meetings for today?" }, attachments = []) {
+  const isNewSession = !PropertiesService.getUserProperties().getProperty('AGENT_SESSION_NAME');
+  const sessionName = getOrCreateAgentSession();
+  const queryText = isNewSession ? "SYSTEM PROMPT START Do not respond with tables but use bullet points instead SYSTEM PROMPT END\n\n" + input.text : input.text;
+
+  // Prepare the streamAssist payload
+  const requestPayload = {
+    // Reuse the user session
+    "session": sessionName,
+    // Add user metadata such as timezone to help the agent provide better answers
+    "userMetadata": { "timeZone": Session.getScriptTimeZone() },
+    // Only use the message text
+    "query": { "text": queryText },
+    // Enable all data stores configured for the agent
+    "toolsSpec": { "vertexAiSearchSpec": { "dataStoreSpecs": getAgentDataStores().map(ds => { dataStore: ds }) } },
+    // Specify the agent to use for this request
+    "agentsSpec": { "agentSpecs": [{ "agentId": getAgentId() }] }
+  };
+
   // Sync call that gets all events from agent response
   const responseContentText = UrlFetchApp.fetch(
     `https://${getLocation()}-discoveryengine.googleapis.com/v1alpha/${getReasoningEngine()}/assistants/default_assistant:streamAssist?alt=sse`,
@@ -26,18 +44,7 @@ function requestAgent(input={text: "Who am I and what are my Calendar meetings f
       // Use the user's credentials to ensure the agent can access user data
       headers: { 'Authorization': `Bearer ${ScriptApp.getOAuthToken()}` },
       contentType: 'application/json',
-      payload: JSON.stringify({
-        // Always use a new session
-        "session" : null,
-        // Add user metadata such as timezone to help the agent provide better answers
-        "userMetadata": { "timeZone": Session.getScriptTimeZone() },
-        // Only use the message text
-        "query": { "text": "Do not respond with tables, use bullet points instead. " + input.text },
-        // Enable all data stores configured for the agent
-        "toolsSpec": { "vertexAiSearchSpec": { "dataStoreSpecs": getAgentDataStores().map(ds => { dataStore: ds }) }},
-        // Specify the agent to use for this request
-        "agentsSpec": { "agentSpecs": [{ "agentId": getAgentId() }]}
-      }),
+      payload: JSON.stringify(requestPayload),
       muteHttpExceptions: true
     }
   ).getContentText();
@@ -162,4 +169,46 @@ function createMarkdownWidgets(markdown) {
   const textParagraph = CardService.newTextParagraph();
   textParagraph.setText(new showdown.Converter().makeHtml(markdown));
   return [textParagraph];
+}
+
+// ---  Session Management ---
+
+const AGENT_SESSION_NAME = 'AGENT_SESSION_NAME';
+
+// Creates a new agent session.
+function createAgentSession() {
+  const responseContentJson = UrlFetchApp.fetch(
+    `https://${getLocation()}-discoveryengine.googleapis.com/v1alpha/${getReasoningEngine()}/sessions`,
+    {
+      method: 'post',
+      headers: { 'Authorization': `Bearer ${ScriptApp.getOAuthToken()}` },
+      contentType: 'application/json',
+      payload: JSON.stringify({ "state": "IN_PROGRESS" }),
+      muteHttpExceptions: true
+    }
+  ).getContentText();
+
+  if (isInDebugMode()) {
+    console.log(`Create session response: ${responseContentJson}`);
+  }
+
+  const createdSessionName = JSON.parse(responseContentJson).name;
+  console.log(`Created session: ${createdSessionName}`);
+  return createdSessionName;
+}
+
+// Retrieves or creates the agent session for the user.
+function getOrCreateAgentSession() {
+  const userProperties = PropertiesService.getUserProperties();
+  let sessionName = userProperties.getProperty(AGENT_SESSION_NAME);
+
+  if (!sessionName) {
+    sessionName = createAgentSession();
+    userProperties.setProperty(AGENT_SESSION_NAME, sessionName);
+    console.log(`Saved new session: ${sessionName}`);
+  } else {
+    console.log(`Found existing session: ${sessionName}`);
+  }
+
+  return sessionName;
 }

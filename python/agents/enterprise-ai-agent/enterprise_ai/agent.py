@@ -38,7 +38,7 @@ def find_serving_config_path():
     engines = discoveryengine_v1.EngineServiceClient().list_engines(
         parent=f"projects/{project_id}/locations/global/collections/default_collection"
     )
-    return f"{engines[0].name}/servingConfigs/default_serving_config"
+    return f"{list(engines)[0].name}/servingConfigs/default_serving_config"
 
 def _get_access_token_from_context(tool_context: ToolContext) -> str:
     """Helper method to dynamically parse the intercepted bearer token from the context state."""
